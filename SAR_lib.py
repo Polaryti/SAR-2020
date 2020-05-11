@@ -405,11 +405,21 @@ class SAR_Project:
         return: posting list con los newid incluidos en p1 y p2
 
         """
+        res = []
+        i = 0
+        j = 0
+
+        while i < len(p1) and j < len(p2):
+            if p1[i][0] == p2[j][0] and p1[i][1] == p2[j][1]:
+                res.append(p1[i])
+                i += 1
+                j += 1
+            elif p1[i][0] == p2[j][0] and p1[i][1] < p2[j][1] or p1[i][0] < p2[j][0]:
+                i += 1
+            elif p1[i][0] == p2[j][0] and p1[i][1] > p2[j][1] or p1[i][0] > p2[j][0]:
+                j += 1
         
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
+        return res
 
 
 
@@ -425,12 +435,29 @@ class SAR_Project:
         return: posting list con los newid incluidos de p1 o p2
 
         """
+        res = []
+        i = 0
+        j = 0
 
-        
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
+        while i < len(p1) and j < len(p2):
+            if p1[i][0] == p2[j][0] and p1[i][1] == p2[j][1]:
+                res.append(p1[i])
+                i += 1
+                j += 1
+            elif p1[i][0] == p2[j][0] and p1[i][1] < p2[j][1] or p1[i][0] < p2[j][0]:
+                res.append(p1[i])
+                i += 1
+            elif p1[i][0] == p2[j][0] and p1[i][1] > p2[j][1] or p1[i][0] > p2[j][0]:
+                res.append(p2[j])
+                j += 1
+
+        for pos in range(i, len(p1)):
+            res.append(p1[pos])
+
+        for pos in range(j, len(p2)):
+            res.append(p2[pos])
+
+        return res
 
 
     def minus_posting(self, p1, p2):

@@ -4,6 +4,8 @@ Proyecto de prácticas de Sistemas de Almacenamiento y Recuperación de la Infor
 
 ## Funcionalidades básicas implementadas
 
+index_file(self, filename)
+
 and_posting(self, p1, p2) - Operador AND lógico
 or_posting(self, p1, p2) - Operador OR lógico
 

@@ -52,6 +52,7 @@ class SAR_Project:
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
 
 
+
     ###############################
     ###                         ###
     ###      CONFIGURACION      ###
@@ -142,11 +143,15 @@ class SAR_Project:
         self.stemming = args['stem']
         self.permuterm = args['permuterm']
 
+        # Variable secuencial que representa el id de un fichero
+        docid = 0
         for dir, subdirs, files in os.walk(root):
             for filename in files:
                 if filename.endswith('.json'):
                     fullname = os.path.join(dir, filename)
+                    self.docs[docid] = fullname
                     self.index_file(fullname)
+                    docid += 1
 
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
@@ -167,23 +172,34 @@ class SAR_Project:
         input: "filename" es el nombre de un fichero en formato JSON Arrays (https://www.w3schools.com/js/js_json_arrays.asp).
                 Una vez parseado con json.load tendremos una lista de diccionarios, cada diccionario se corresponde a una noticia
 
-        """
 
+        """ 
+        # COMPLETAR: asignar identificador al fichero 'filename' ¿¿¿¿????
         with open(filename) as fh:
             jlist = json.load(fh)
+            
+            # Contador de la posición de una noticia en un dichero
+            contador_noticia = 0
+            for noticia in jlist:
+                # Se añade al diccionario de noticias la noticia con clave -> hash(noticia) y valor -> (filename, contador_noticia
+                self.news[hash(noticia)] = (filename, contador_noticia)
+                # Tokenizamos el cotenido de article (devuelve una lista de terminos procesados)
+                contenido = self.tokenize(contenido['article'])
+                # Contador de la posición de un token en una noticia (puede que sea util más adelante)
+                posicion_token = 0
+                for token in contenido:
+                    # Si el token no esta en el diccionario de tokens, lo añadimos con clave -> token y valor -> hash(noticia)
+                    if token not in self.index['article']:
+                        self.index['article'][token] = [hash(noticia)]
+                    # Si el token esta ya...
+                    else:
+                        # ...comprobamos que no lo hayamos indexado ya para esta noticia
+                        if self.index['article'][token] not in self.index['article'][token]:
+                            self.index['article'][token] = self.index['article'][token].append(hash(noticia))
 
-        #
-        # "jlist" es una lista con tantos elementos como noticias hay en el fichero,
-        # cada noticia es un diccionario con los campos:
-        #      "title", "date", "keywords", "article", "summary"
-        #
-        # En la version basica solo se debe indexar el contenido "article"
-        #
-        #
-        #
-        #################
-        ### COMPLETAR ###
-        #################
+                    posicion_token += 1
+
+                contador_noticia += 1
 
 
 

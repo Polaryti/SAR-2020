@@ -36,7 +36,12 @@ class SAR_Project:
         Puedes añadir más variables si las necesitas 
 
         """
-        self.index = {} # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
+        self.index = {'title' : {},
+                    'date' : {},
+                    'keywords' : {},
+                    'article' : {},
+                    'summary' : {}
+                    } # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
                         # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
                         # self.index['title'] seria el indice invertido del campo 'title'.
         self.sindex = {} # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
@@ -156,6 +161,7 @@ class SAR_Project:
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
         ##########################################
+        self.make_stemming()
         
 
     def index_file(self, filename):
@@ -174,31 +180,34 @@ class SAR_Project:
 
 
         """ 
-        # COMPLETAR: asignar identificador al fichero 'filename' ¿¿¿¿????
+        # IMPORTANTE: Se ha implementado el extra 'multifield' y 'positional'
+        # Un fichero esta compuesto por noticias, cada noticia por cinco campos y cada campo por unos tokens
         with open(filename) as fh:
             jlist = json.load(fh)
             
-            # Contador de la posición de una noticia en un dichero
+            # Contador de la posición de una noticia en un fichero
             contador_noticia = 0
             for noticia in jlist:
-                # Se añade al diccionario de noticias la noticia con clave -> hash(noticia) y valor -> (filename, contador_noticia
+                # Se añade al diccionario de noticias la noticia con clave -> hash(noticia) y valor -> (filename, contador_noticia)
                 self.news[hash(noticia)] = (filename, contador_noticia)
-                # Tokenizamos el cotenido de article (devuelve una lista de terminos procesados)
-                contenido = self.tokenize(contenido['article'])
-                # Contador de la posición de un token en una noticia (puede que sea util más adelante)
-                posicion_token = 0
-                for token in contenido:
-                    # Si el token no esta en el diccionario de tokens, lo añadimos con clave -> token y valor -> hash(noticia)
-                    if token not in self.index['article']:
-                        self.index['article'][token] = [hash(noticia)]
-                    # Si el token esta ya...
-                    else:
-                        # ...comprobamos que no lo hayamos indexado ya para esta noticia
-                        if hash(noticia) not in self.index['article'][token]:
-                            self.index['article'][token] = self.index['article'][token].append(hash(noticia))
+                
+                # Campos a tokenizar
+                multifield = [cat[0] for cat in fields if cat[1]]
+                for category in multifield:
+                    # Tokenizamos el cotenido de article (devuelve una lista de terminos procesados)
+                    contenido = self.tokenize(contenido[category])
+                    # Contador de la posición de un token en una noticia
+                    posicion_token = 0
+                    for token in contenido:
+                        # Si el token no esta en el diccionario de tokens, lo añadimos con clave -> token y valor -> (hash(noticia), posición)
+                        if token not in self.index[category]:
+                            self.index[category][token] = [(hash(noticia), posicion_token)]
+                        # Si el token esta ya
+                        else:
+                            self.index[category][token] = self.index[category][token].append((hash(noticia), posicion_token))
 
-                    posicion_token += 1
-
+                        posicion_token += 1
+            
                 contador_noticia += 1
 
 
@@ -228,11 +237,15 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        
-        pass
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
+        multifield = [cat[0] for cat in fields if cat[1]]
+        for category in multifield:
+            for token in self.index[category].keys():
+                token_s = token
+                if token_s not in self.sindex:
+                    self.sindex[token_s] = [token]
+                else:
+                    if token not in self.sindex[token_s]:
+                        self.sindex[token_s] = self.sindex[token_s].append(token)
 
 
     
@@ -243,10 +256,17 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        pass
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
+        multifield = [cat[0] for cat in fields if cat[1]]
+        for category in multifield:
+            for token in self.index[category].keys():
+                if token not in self.ptindex:
+                    token = token + '$'
+                    permuterm = []
+                    for _ in range(len(token) - 1):
+                        token = token[1:] + token[0]
+                        permuterm += token
+
+                    self.ptindex[token] = permuterm
 
 
 
@@ -354,7 +374,7 @@ class SAR_Project:
         Devuelve la posting list asociada al stem de un termino.
 
         param:  "term": termino para recuperar la posting list de su stem.
-                "field": campo sobre el que se debe recuperar la posting list, solo necesario se se hace la ampliacion de multiples indices
+                "field": campo sobre el que se debe recuperar la posting list, solo necesario si se hace la ampliacion de multiples indices
 
         return: posting list
 

@@ -194,7 +194,7 @@ class SAR_Project:
                     # Si el token esta ya...
                     else:
                         # ...comprobamos que no lo hayamos indexado ya para esta noticia
-                        if self.index['article'][token] not in self.index['article'][token]:
+                        if hash(noticia) not in self.index['article'][token]:
                             self.index['article'][token] = self.index['article'][token].append(hash(noticia))
 
                     posicion_token += 1

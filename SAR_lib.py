@@ -44,12 +44,22 @@ class SAR_Project:
                     } # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
                         # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
                         # self.index['title'] seria el indice invertido del campo 'title'.
-        self.sindex = {} # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
-        self.ptindex = {} # hash para el indice permuterm.
+        self.sindex = {'title' : {},
+                    'date' : {},
+                    'keywords' : {},
+                    'article' : {},
+                    'summary' : {}
+                    } # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
+        self.ptindex = {'title' : {},
+                    'date' : {},
+                    'keywords' : {},
+                    'article' : {},
+                    'summary' : {}
+                    } # hash para el indice permuterm.
         self.docs = {} # diccionario de terminos --> clave: entero(docid),  valor: ruta del fichero.
         self.weight = {} # hash de terminos para el pesado, ranking de resultados. puede no utilizarse
         self.news = {} # hash de noticias --> clave entero (newid), valor: la info necesaria para diferencia la noticia dentro de su fichero
-        self.tokenizer = re.compile("\W+") # expresion regular para hacer la tokenizacion
+        self.tokenizer = re.compile(r'\W+') # expresion regular para hacer la tokenizacion
         self.stemmer = SnowballStemmer('spanish') # stemmer en castellano
         self.show_all = False # valor por defecto, se cambia con self.set_showall()
         self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
@@ -151,7 +161,7 @@ class SAR_Project:
 
         # Variable secuencial que representa el id de un fichero
         docid = 0
-        for dir, subdirs, files in os.walk(root):
+        for dir, _, files in os.walk(root):
             for filename in files:
                 if filename.endswith('.json'):
                     fullname = os.path.join(dir, filename)
@@ -194,19 +204,21 @@ class SAR_Project:
                 self.news[hash(noticia)] = (filename, contador_noticia)
                 
                 # Campos a tokenizar
-                multifield = [cat[0] for cat in fields if cat[1]]
-                for category in multifield:
+                multifield = [cat[0] for cat in self.fields if cat[1]]
+                for field in multifield:
                     # Tokenizamos el cotenido de article (devuelve una lista de terminos procesados)
-                    contenido = self.tokenize(contenido[category])
+                    contenido[field]
+                    if field != 'date':
+                        contenido = self.tokenize(contenido[field])
                     # Contador de la posición de un token en una noticia
                     posicion_token = 0
                     for token in contenido:
                         # Si el token no esta en el diccionario de tokens, lo añadimos con clave -> token y valor -> (hash(noticia), posición)
-                        if token not in self.index[category]:
-                            self.index[category][token] = [(hash(noticia), posicion_token)]
+                        if token not in self.index[field]:
+                            self.index[field][token] = [(hash(noticia), posicion_token)]
                         # Si el token esta ya
                         else:
-                            self.index[category][token] = self.index[category][token].append((hash(noticia), posicion_token))
+                            self.index[field][token] = self.index[field][token].append((hash(noticia), posicion_token))
 
                         posicion_token += 1
             
@@ -239,15 +251,15 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        multifield = [cat[0] for cat in fields if cat[1]]
-        for category in multifield:
-            for token in self.index[category].keys():
+        multifield = [cat[0] for cat in self.fields if cat[1]]
+        for field in multifield:
+            for token in self.index[field].keys():
                 token_s = token
-                if token_s not in self.sindex:
-                    self.sindex[token_s] = [token]
+                if token_s not in self.sindex[field]:
+                    self.sindex[field][token_s] = [token]
                 else:
-                    if token not in self.sindex[token_s]:
-                        self.sindex[token_s] = self.sindex[token_s].append(token)
+                    if token not in self.sindex[field][token_s]:
+                        self.sindex[field][token_s] = self.sindex[field][token_s].append(token)
 
 
     
@@ -258,18 +270,35 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        multifield = [cat[0] for cat in fields if cat[1]]
-        for category in multifield:
-            for token in self.index[category].keys():
-                if token not in self.ptindex:
-                    token = token + '$'
-                    permuterm = []
-                    for _ in range(len(token) - 1):
-                        token = token[1:] + token[0]
-                        permuterm += token
+        # multifield = [cat[0] for cat in self.fields if cat[1]]
+        # for category in multifield:
+        #     for token in self.index[category].keys():
+        #         if token not in self.ptindex:
+        #             token = token + '$'
+        #             permuterm = []
+        #             for _ in range(len(token) - 1):
+        #                 token = token[1:] + token[0]
+        #                 permuterm += token
 
-                    self.ptindex[token] = permuterm
+        #             self.ptindex[token] = permuterm
 
+        
+        multifield = [cat[0] for cat in self.fields if cat[1]]
+        for field in multifield:
+            for token in self.index[field].keys():
+                token_p = token + '$'
+                permuterm = []
+                for _ in range(len(token_p) - 1):
+                    token_p = token_p[1:] + token_p[0]
+                    permuterm += token_p
+
+                for permut in permuterm:
+                    if permut not in self.ptindex[field]:
+                        self.ptindex[field][permut] = [token]
+                    else:
+                        if token not in self.ptindex[field][permut]:
+                            self.ptindex[field][permut] = self.ptindex[field][permut].append(token)
+   
 
 
 
@@ -286,24 +315,24 @@ class SAR_Project:
         print('Number of indexed news: {}'.format('algo'))
         print('----------------------------------------')
         print('TOKENS:')
-        for field in fields:
+        for field in self.fields:
             if field[1]:
                 print('     # of tokens in \'{}\': {}'.format(field[0], len(self.index[field[0]])))
         print('----------------------------------------')
         if self.use_permuterm:
-            for field in fields:
+            for field in self.fields:
                 if field[1]:
                     cont = 0
-                    for token in self.index[field[0]]:
-                        cont += len(self.get_permuterm(token, field[0]))
+                    for _ in self.index[field[0]]:
+                        cont += len(self.ptindex[field])
                     print('     # of permuterms in \'{}\': {}'.format(field[0], cont))
             print('----------------------------------------')
         if self.use_stemming:
-            for field in fields:
+            for field in self.fields:
                 if field[1]:
                     cont = 0
-                    for token in self.index[field[0]]:
-                        cont += len(self.get_stemming(token, field[0]))
+                    for _ in self.index[field[0]]:
+                        cont += len(self.sindex[field])
                     print('     # of stems in \'{}\': {}'.format(field[0], cont))
             print('----------------------------------------')
         if 'positional_queries':
@@ -383,10 +412,22 @@ class SAR_Project:
         return: posting list
 
         """
-        pass
-        ########################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE POSICIONALES ##
-        ########################################################
+        res = []
+        # Recorremos la posting list del primer termino
+        for post in self.index[field][terms[0]]:
+            seguido = True
+            # Obtenemos la noticia y la posición
+            new, pos = post
+            # Se comprueba que, para los siguientes terminos, eixste una entrada con ese noticia y una posición más
+            for term in terms[1:] and seguido:
+                if self.index[field][term].contains((new, pos + 1)):
+                    pos += 1
+                else:
+                    seguido = False
+            if seguido:
+                res += new
+
+        return res
 
 
     def get_stemming(self, term, field='article'):
@@ -401,12 +442,14 @@ class SAR_Project:
         return: posting list
 
         """
-        
         stem = self.stemmer.stem(term)
+        res = []
 
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
+        # Se hace la unión de las diferentes posting list de cada termino al que apunta el stem
+        for token in self.sindex[field][stem]:
+            res += self.index[field][token]
+
+        return res
 
 
     def get_permuterm(self, term, field='article'):
@@ -421,10 +464,13 @@ class SAR_Project:
         return: posting list
 
         """
+        res = []
 
-        ##################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA PERMUTERM ##
-        ##################################################
+        # Se hace la unión de las diferentes posting list de cada termino al que apunta un indice permuterm
+        for token in self.ptindex[field][term]:
+            res += self.index[field][token]
+
+        return res
 
 
 
@@ -443,11 +489,17 @@ class SAR_Project:
         return: posting list con todos los newid exceptos los contenidos en p
 
         """
+        # Obtenemos lista de todas las noticias
+        res = self.news.values()
+        # Recorremos la posting list
+        for post in p:
+            # Obtenemos la noticia (valor hash)
+            new, _ = post
+            # Eliminamos la noticia de la lista de todas las noticias
+            res.remove(new)
         
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
+        return res
+
 
 
 
@@ -467,6 +519,7 @@ class SAR_Project:
         i = 0
         j = 0
 
+        # El pseudocodigo de teoria pasado a Python
         while i < len(p1) and j < len(p2):
             if p1[i][0] == p2[j][0] and p1[i][1] == p2[j][1]:
                 res.append(p1[i])
@@ -497,6 +550,7 @@ class SAR_Project:
         i = 0
         j = 0
 
+        # El pseudocodigo de teoria pasado a Python
         while i < len(p1) and j < len(p2):
             if p1[i][0] == p2[j][0] and p1[i][1] == p2[j][1]:
                 res.append(p1[i])
@@ -605,7 +659,7 @@ class SAR_Project:
 
         """
 
-        pass
+        return -1
         
         ###################################################
         ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE RANKING ##

@@ -55,6 +55,7 @@ class SAR_Project:
         self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
         self.use_stemming = False # valor por defecto, se cambia con self.set_stemming()
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
+        self.use_permuterm = False
 
 
 
@@ -162,6 +163,7 @@ class SAR_Project:
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
         ##########################################
         self.make_stemming()
+        self.make_permuterm()
         
 
     def index_file(self, filename):
@@ -278,17 +280,37 @@ class SAR_Project:
         Muestra estadisticas de los indices
         
         """
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
-        
-
-
-
-
-
+        print('\n========================================')
+        print('Number of indexed days: {}'.format('algo'))
+        print('----------------------------------------')
+        print('Number of indexed news: {}'.format('algo'))
+        print('----------------------------------------')
+        print('TOKENS:')
+        for field in fields:
+            if field[1]:
+                print('     # of tokens in \'{}\': {}'.format(field[0], len(self.index[field[0]])))
+        print('----------------------------------------')
+        if self.use_permuterm:
+            for field in fields:
+                if field[1]:
+                    cont = 0
+                    for token in self.index[field[0]]:
+                        cont += len(self.get_permuterm(token, field[0]))
+                    print('     # of permuterms in \'{}\': {}'.format(field[0], cont))
+            print('----------------------------------------')
+        if self.use_stemming:
+            for field in fields:
+                if field[1]:
+                    cont = 0
+                    for token in self.index[field[0]]:
+                        cont += len(self.get_stemming(token, field[0]))
+                    print('     # of stems in \'{}\': {}'.format(field[0], cont))
+            print('----------------------------------------')
+        if 'positional_queries':
+            print('Positional queries are allowed.')
+        else:
+            print('Positional queries are NOT allowed.')
+        print('========================================')
 
 
 

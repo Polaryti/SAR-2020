@@ -16,9 +16,8 @@ class SAR_Project:
     Los metodos que se añadan se deberan documentar en el codigo y explicar en la memoria
     """
 
-    # lista de campos, el booleano indica si se debe tokenizar el campo
-    # NECESARIO PARA LA AMPLIACION MULTIFIELD
-    fields = [("title", True), ("date", False),
+    # Campos a tokenizar
+    fields = [("title", True), ("date", True),
               ("keywords", True), ("article", True),
               ("summary", True)]
     
@@ -65,7 +64,6 @@ class SAR_Project:
         self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
         self.use_stemming = False # valor por defecto, se cambia con self.set_stemming()
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
-        self.use_permuterm = False
 
 
 
@@ -172,8 +170,10 @@ class SAR_Project:
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
         ##########################################
-        self.make_stemming()
-        self.make_permuterm()
+        if self.stemming:
+            self.make_stemming()
+        if self.permuterm:
+            self.make_permuterm()
         
 
     def index_file(self, filename):
@@ -200,26 +200,34 @@ class SAR_Project:
             # Contador de la posición de una noticia en un fichero
             contador_noticia = 0
             for noticia in jlist:
-                # Se añade al diccionario de noticias la noticia con clave -> hash(noticia) y valor -> (filename, contador_noticia)
-                self.news[hash(noticia)] = (filename, contador_noticia)
+                # Se añade al diccionario de noticias la noticia con clave -> noticia['id'], valor -> (filename, contador_noticia)
+                self.news[noticia['id']] = (filename, contador_noticia)
                 
-                # Campos a tokenizar
-                multifield = [cat[0] for cat in self.fields if cat[1]]
+                # Campos a tratar
+                if self.multifield:
+                    multifield = ['title', 'date', 'keywords', 'article', 'summary']
+                else:
+                    multifield = ['article', 'date']
                 for field in multifield:
                     # Se tokeniza el cotenido de cada campo (menos el de date)
-                    contenido[field]
                     if field != 'date':
-                        contenido = self.tokenize(contenido[field])
+                        contenido = self.tokenize(noticia[field])
+                    else:
+                        contenido = [noticia[field]]
                     # Contador de la posición de un token en una noticia
                     posicion_token = 0
                     for token in contenido:
                         # Si el token no esta en el diccionario de tokens, se añade
                         if token not in self.index[field]:
-                            self.index[field][token] = {hash(noticia): [posicion_token]}
+                            self.index[field][token] = {noticia['id']: [posicion_token]}
                         # Si el token esta ya
                         else:
-                            # Se añade a la entrada del token-noticia la posición donde se ha encontrado
-                            self.index[field][token][hash(noticia)] += posicion_token
+                            # Si no existe la noticia en el token
+                            if noticia['id'] not in self.index[field][token].keys():
+                                self.index[field][token][noticia['id']] = [posicion_token]
+                            else:
+                                # Se añade a la entrada del token-noticia la posición donde se ha encontrado
+                                self.index[field][token][noticia['id']] += [posicion_token]
 
                         posicion_token += 1
             
@@ -252,15 +260,19 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        multifield = [cat[0] for cat in self.fields if cat[1]]
+        # Campos a tratar
+        if self.multifield:
+            multifield = ['title', 'date', 'keywords', 'article', 'summary']
+        else:
+            multifield = ['article']
         for field in multifield:
             for token in self.index[field].keys():
-                token_s = token
+                token_s = self.stemmer.stem(token)
                 if token_s not in self.sindex[field]:
                     self.sindex[field][token_s] = [token]
                 else:
                     if token not in self.sindex[field][token_s]:
-                        self.sindex[field][token_s] = self.sindex[field][token_s].append(token)
+                        self.sindex[field][token_s] += [token]
 
 
     
@@ -270,36 +282,26 @@ class SAR_Project:
 
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
-        """
-        # multifield = [cat[0] for cat in self.fields if cat[1]]
-        # for category in multifield:
-        #     for token in self.index[category].keys():
-        #         if token not in self.ptindex:
-        #             token = token + '$'
-        #             permuterm = []
-        #             for _ in range(len(token) - 1):
-        #                 token = token[1:] + token[0]
-        #                 permuterm += token
-
-        #             self.ptindex[token] = permuterm
-
-        
-        multifield = [cat[0] for cat in self.fields if cat[1]]
+        """        
+        # Campos a tratar
+        if self.multifield:
+            multifield = ['title', 'date', 'keywords', 'article', 'summary']
+        else:
+            multifield = ['article']
         for field in multifield:
-            for token in self.index[field].keys():
+            for token in self.index[field]:
                 token_p = token + '$'
                 permuterm = []
-                for _ in range(len(token_p) - 1):
+                for _ in range(len(token_p)):
                     token_p = token_p[1:] + token_p[0]
-                    permuterm += token_p
+                    permuterm += [token_p]
 
                 for permut in permuterm:
                     if permut not in self.ptindex[field]:
                         self.ptindex[field][permut] = [token]
                     else:
                         if token not in self.ptindex[field][permut]:
-                            self.ptindex[field][permut] = self.ptindex[field][permut].append(token)
-   
+                            self.ptindex[field][permut] += [token]
 
 
 
@@ -310,33 +312,32 @@ class SAR_Project:
         Muestra estadisticas de los indices
         
         """
+        # Campos a tratar
+        if self.multifield:
+            multifield = ['title', 'date', 'keywords', 'article', 'summary']
+        else:
+            multifield = ['article']
         print('\n========================================')
-        print('Number of indexed days: {}'.format('algo'))
+        print('Number of indexed days: {}'.format(len(self.index['date'].keys())))
         print('----------------------------------------')
-        print('Number of indexed news: {}'.format('algo'))
+        print('Number of indexed news: {}'.format(len(self.news.keys())))
         print('----------------------------------------')
         print('TOKENS:')
-        for field in self.fields:
-            if field[1]:
-                print('     # of tokens in \'{}\': {}'.format(field[0], len(self.index[field[0]])))
+        for field in multifield:
+            if field:
+                print('     # of tokens in \'{}\': {}'.format(field, len(self.index[field])))
         print('----------------------------------------')
-        if self.use_permuterm:
-            for field in self.fields:
-                if field[1]:
-                    cont = 0
-                    for _ in self.index[field[0]]:
-                        cont += len(self.ptindex[field])
-                    print('     # of permuterms in \'{}\': {}'.format(field[0], cont))
+        if self.permuterm:
+            for field in multifield:
+                if field:
+                    print('     # of permuterms in \'{}\': {}'.format(field, len(self.ptindex[field])))
             print('----------------------------------------')
-        if self.use_stemming:
-            for field in self.fields:
-                if field[1]:
-                    cont = 0
-                    for _ in self.index[field[0]]:
-                        cont += len(self.sindex[field])
-                    print('     # of stems in \'{}\': {}'.format(field[0], cont))
+        if self.stemming:
+            for field in multifield:
+                if field:
+                    print('     # of stems in \'{}\': {}'.format(field, len(self.sindex[field])))
             print('----------------------------------------')
-        if 'positional_queries':
+        if self.positional:
             print('Positional queries are allowed.')
         else:
             print('Positional queries are NOT allowed.')

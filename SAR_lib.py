@@ -206,19 +206,20 @@ class SAR_Project:
                 # Campos a tokenizar
                 multifield = [cat[0] for cat in self.fields if cat[1]]
                 for field in multifield:
-                    # Tokenizamos el cotenido de article (devuelve una lista de terminos procesados)
+                    # Se tokeniza el cotenido de cada campo (menos el de date)
                     contenido[field]
                     if field != 'date':
                         contenido = self.tokenize(contenido[field])
                     # Contador de la posición de un token en una noticia
                     posicion_token = 0
                     for token in contenido:
-                        # Si el token no esta en el diccionario de tokens, lo añadimos con clave -> token y valor -> (hash(noticia), posición)
+                        # Si el token no esta en el diccionario de tokens, se añade
                         if token not in self.index[field]:
-                            self.index[field][token] = [(hash(noticia), posicion_token)]
+                            self.index[field][token] = {hash(noticia): [posicion_token]}
                         # Si el token esta ya
                         else:
-                            self.index[field][token] = self.index[field][token].append((hash(noticia), posicion_token))
+                            # Se añade a la entrada del token-noticia la posición donde se ha encontrado
+                            self.index[field][token][hash(noticia)] += posicion_token
 
                         posicion_token += 1
             
@@ -413,19 +414,24 @@ class SAR_Project:
 
         """
         res = []
-        # Recorremos la posting list del primer termino
-        for post in self.index[field][terms[0]]:
-            seguido = True
-            # Obtenemos la noticia y la posición
-            new, pos = post
-            # Se comprueba que, para los siguientes terminos, eixste una entrada con ese noticia y una posición más
-            for term in terms[1:] and seguido:
-                if self.index[field][term].contains((new, pos + 1)):
-                    pos += 1
-                else:
-                    seguido = False
-            if seguido:
-                res += new
+
+        # Se comprueba que se ha indexado el primer termino
+        if terms[0] in self.index[field]:
+            # Se recorre la posting list del primer termino (quitando el número de documentos)
+            for post in self.index[field][terms[0]].items():
+                seguido = True
+                # Obtenemos la noticia y la posición
+                new, pos = post
+                # Se comprueba que, para los siguientes terminos, eixste una entrada con ese noticia y una posición más
+                for term in terms[1:] and seguido:
+                    if term in self.index[field]:
+                        if new in self.index[field][term]:
+                            if self.index[field][term][new].contains(pos + 1):
+                                pos += 1
+                            else:
+                                seguido = False
+                if seguido:
+                    res += new
 
         return res
 

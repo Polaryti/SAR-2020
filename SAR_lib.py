@@ -23,11 +23,9 @@ class SAR_Project:
     fields = [("title", True), ("date", True),
               ("keywords", True), ("article", True),
               ("summary", True)]
-    
-    
+
     # numero maximo de documento a mostrar cuando self.show_all es False
     SHOW_MAX = 10
-
 
     def __init__(self):
         """
@@ -38,38 +36,41 @@ class SAR_Project:
         Puedes añadir más variables si las necesitas 
 
         """
-        self.index = {'title' : {},
-                    'date' : {},
-                    'keywords' : {},
-                    'article' : {},
-                    'summary' : {}
-                    } # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
-                        # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
-                        # self.index['title'] seria el indice invertido del campo 'title'.
-        self.sindex = {'title' : {},
-                    'date' : {},
-                    'keywords' : {},
-                    'article' : {},
-                    'summary' : {}
-                    } # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
-        self.ptindex = {'title' : {},
-                    'date' : {},
-                    'keywords' : {},
-                    'article' : {},
-                    'summary' : {}
-                    } # hash para el indice permuterm.
-        self.docs = {} # diccionario de terminos --> clave: entero(docid),  valor: ruta del fichero.
-        self.weight = {} # hash de terminos para el pesado, ranking de resultados. puede no utilizarse
-        self.news = {} # hash de noticias --> clave entero (newid), valor: la info necesaria para diferencia la noticia dentro de su fichero
-        self.tokenizer = re.compile(r'\W+') # expresion regular para hacer la tokenizacion
-        self.stemmer = SnowballStemmer('spanish') # stemmer en castellano
-        self.show_all = False # valor por defecto, se cambia con self.set_showall()
-        self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
-        self.use_stemming = False # valor por defecto, se cambia con self.set_stemming()
+        self.index = {'title': {},
+                      'date': {},
+                      'keywords': {},
+                      'article': {},
+                      'summary': {}
+                      }  # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
+        # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
+        # self.index['title'] seria el indice invertido del campo 'title'.
+        self.sindex = {'title': {},
+                       'date': {},
+                       'keywords': {},
+                       'article': {},
+                       'summary': {}
+                       }  # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
+        self.ptindex = {'title': {},
+                        'date': {},
+                        'keywords': {},
+                        'article': {},
+                        'summary': {}
+                        }  # hash para el indice permuterm.
+        # diccionario de terminos --> clave: entero(docid),  valor: ruta del fichero.
+        self.docs = {}
+        # hash de terminos para el pesado, ranking de resultados. puede no utilizarse
+        self.weight = {}
+        # hash de noticias --> clave entero (newid), valor: la info necesaria para diferencia la noticia dentro de su fichero
+        self.news = {}
+        # expresion regular para hacer la tokenizacion
+        self.tokenizer = re.compile(r'\W+')
+        self.stemmer = SnowballStemmer('spanish')  # stemmer en castellano
+        self.show_all = False  # valor por defecto, se cambia con self.set_showall()
+        self.show_snippet = False  # valor por defecto, se cambia con self.set_snippet()
+        self.use_stemming = False  # valor por defecto, se cambia con self.set_stemming()
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
         self.doc_cont = 0
         self.new_cont = 0
-
 
 
     ###############################
@@ -77,7 +78,6 @@ class SAR_Project:
     ###      CONFIGURACION      ###
     ###                         ###
     ###############################
-
 
     def set_showall(self, v):
         """
@@ -93,7 +93,6 @@ class SAR_Project:
         """
         self.show_all = v
 
-
     def set_snippet(self, v):
         """
 
@@ -108,7 +107,6 @@ class SAR_Project:
         """
         self.show_snippet = v
 
-
     def set_stemming(self, v):
         """
 
@@ -122,7 +120,6 @@ class SAR_Project:
 
         """
         self.use_stemming = v
-
 
     def set_ranking(self, v):
         """
@@ -139,14 +136,11 @@ class SAR_Project:
         self.use_ranking = v
 
 
-
-
     ###############################
     ###                         ###
     ###   PARTE 1: INDEXACION   ###
     ###                         ###
     ###############################
-
 
     def index_dir(self, root, **args):
         """
@@ -169,10 +163,6 @@ class SAR_Project:
                     fullname = os.path.join(dir, filename)
                     self.index_file(fullname)
 
-        print(self.doc_cont)
-        print(self.new_cont)
-                    
-
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
         ##########################################
@@ -180,7 +170,6 @@ class SAR_Project:
             self.make_stemming()
         if self.permuterm:
             self.make_permuterm()
-        
 
     def index_file(self, filename):
         """
@@ -197,22 +186,23 @@ class SAR_Project:
                 Una vez parseado con json.load tendremos una lista de diccionarios, cada diccionario se corresponde a una noticia
 
 
-        """ 
+        """
         # IMPORTANTE: Se ha implementado el extra 'multifield' y 'positional'
         # Un fichero esta compuesto por noticias, cada noticia por cinco campos y cada campo por unos tokens
         with open(filename) as fh:
             jlist = json.load(fh)
             self.docs[self.doc_cont] = filename
-            
+
             # Contador de la posición de una noticia en un fichero
             contador_noticia = 0
             for noticia in jlist:
                 # Se añade al diccionario de noticias la noticia con clave -> self.new_cont, valor -> (filename, contador_noticia)
                 self.news[self.new_cont] = [self.doc_cont, contador_noticia]
-                
+
                 # Campos a tratar
                 if self.multifield:
-                    multifield = ['title', 'date', 'keywords', 'article', 'summary']
+                    multifield = ['title', 'date',
+                                  'keywords', 'article', 'summary']
                 else:
                     multifield = ['article', 'date']
                 for field in multifield:
@@ -226,12 +216,14 @@ class SAR_Project:
                     for token in contenido:
                         # Si el token no esta en el diccionario de tokens, se añade
                         if token not in self.index[field]:
-                            self.index[field][token] = {self.new_cont: [posicion_token]}
+                            self.index[field][token] = {
+                                self.new_cont: [posicion_token]}
                         # Si el token esta ya
                         else:
                             # Si no existe la noticia en el token
                             if self.new_cont not in self.index[field][token]:
-                                self.index[field][token][self.new_cont] = [posicion_token]
+                                self.index[field][token][self.new_cont] = [
+                                    posicion_token]
                             else:
                                 # Se añade a la entrada del token-noticia la posición donde se ha encontrado
                                 self.index[field][token][self.new_cont] += [posicion_token]
@@ -239,11 +231,10 @@ class SAR_Project:
                         posicion_token += 1
 
                 self.new_cont += 1
-            
+
                 contador_noticia += 1
 
             self.doc_cont += 1
-
 
 
     def tokenize(self, text):
@@ -259,7 +250,6 @@ class SAR_Project:
 
         """
         return self.tokenizer.sub(' ', text.lower()).split()
-
 
 
     def make_stemming(self):
@@ -284,16 +274,13 @@ class SAR_Project:
                 else:
                     if token not in self.sindex[field][token_s]:
                         self.sindex[field][token_s] += [token]
-
-
-    
     def make_permuterm(self):
         """
         NECESARIO PARA LA AMPLIACION DE PERMUTERM
 
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
-        """        
+        """
         # Campos a tratar
         if self.multifield:
             multifield = ['title', 'date', 'keywords', 'article', 'summary']
@@ -314,8 +301,6 @@ class SAR_Project:
                         if token not in self.ptindex[field][permut]:
                             self.ptindex[field][permut] += [token]
 
-
-
     def show_stats(self):
         """
         NECESARIO PARA TODAS LAS VERSIONES
@@ -329,24 +314,28 @@ class SAR_Project:
         else:
             multifield = ['article']
         print('\n========================================')
-        print('Number of indexed days: {}'.format(len(self.index['date'].keys())))
+        print('Number of indexed days: {}'.format(
+            len(self.index['date'].keys())))
         print('----------------------------------------')
         print('Number of indexed news: {}'.format(len(self.news.keys())))
         print('----------------------------------------')
         print('TOKENS:')
         for field in multifield:
             if field:
-                print('     # of tokens in \'{}\': {}'.format(field, len(self.index[field])))
+                print('     # of tokens in \'{}\': {}'.format(
+                    field, len(self.index[field])))
         print('----------------------------------------')
         if self.permuterm:
             for field in multifield:
                 if field:
-                    print('     # of permuterms in \'{}\': {}'.format(field, len(self.ptindex[field])))
+                    print('     # of permuterms in \'{}\': {}'.format(
+                        field, len(self.ptindex[field])))
             print('----------------------------------------')
         if self.stemming:
             for field in multifield:
                 if field:
-                    print('     # of stems in \'{}\': {}'.format(field, len(self.sindex[field])))
+                    print('     # of stems in \'{}\': {}'.format(
+                        field, len(self.sindex[field])))
             print('----------------------------------------')
         if self.positional:
             print('Positional queries are allowed.')
@@ -354,14 +343,11 @@ class SAR_Project:
             print('Positional queries are NOT allowed.')
         print('========================================')
 
-
-
     ###################################
     ###                             ###
     ###   PARTE 2.1: RECUPERACION   ###
     ###                             ###
     ###################################
-
 
     def solve_query(self, query, prev={}):
         """
@@ -383,27 +369,115 @@ class SAR_Project:
             return []
         else:
             query_aux = query.split(' ')
-            # Si se busca solo una palabras
-            if len(query_aux) == 1:
-                return self.get_posting(query_aux[0])
-            # Primero se procesan los positionals
+            procesado = False
+
+            # Primero se resuelven las subconsultas (de forma recursiva por si hay parentesis anidados).
+            # Al final, un (...), se transforma en un posting list ([...])
+            if '(' in query:
+                total_subs = query.count('(')
+                while total_subs > 0 and '(' in ' '.join(query_aux):
+                    print(query_aux)
+                    cont = 0
+                    encontrado = False
+                    for t in (x for x in query_aux if not encontrado):
+                        # Una sola palabra (este caso es sucio, pero bueno...)
+                        if t.count('(') + t.count(')') == 2:
+                            t = t.replace('(', '')
+                            t = t.replace(')', '')
+                            query_aux[cont] = self.get_posting(t)
+                            encontrado = True
+                            total_subs -= 1
+                        else:
+                            print('NO')
+                            s_cont = 1
+                            ani_cont = 0
+                            while not encontrado:
+                                if '(' in query_aux[cont + s_cont]:
+                                    ani_cont += 1
+                                if ')' in query_aux[cont + s_cont]:
+                                    if ani_cont > 0:
+                                        ani_cont -= 1
+                                    else:
+                                        query_aux[cont] = query_aux[cont].replace(
+                                            '(', '')
+                                        query_aux[s_cont + cont] = query_aux[s_cont +
+                                                                             cont].replace(')', '')
+                                        query_aux = query_aux[:cont] + self.solve_query(
+                                            ' '.join(query_aux[cont: s_cont + cont + 1])) + query_aux[cont + s_cont + 1:]
+                                        encontrado = True
+                                        total_subs -= 1
+
+                                s_cont += 1
+
+                        cont += 1
+
+            # Luego los posicionals ('"...""')
+            if '"' in query:
+                print('Pos')
+                while '"' in ' '.join(query_aux):
+                    cont = 0
+                    for t in query_aux:
+                        # Una positional de una sola palabra (este caso es sucio, pero bueno...)
+                        if t.count('"') == 2:
+                            query_aux[cont] = self.get_posting(query_aux[cont])
+                        else:
+                            s_cont = 1
+                            while not ('"') in query_aux[cont + s_cont]:
+                                s_cont += 1
+
+                            query_aux = query_aux[:cont] + self.get_posting(
+                                ' '.join(query_aux[cont: s_cont + cont + 1])) + query_aux[cont + s_cont + 1:]
+                            break
+
+                        cont += 1
+
+                    a = ' '.join(query_aux[cont + 1:])
 
             # Segundo se procesan los comodines
+            # PUEDE QUE SE HAGA SOLO YA
+            # if '*' in query or '?' in query:
+            #     while '"' in ' '.join(query_aux) or '?' in ' '.join(query_aux):
+            #         cont = 0
+            #         for t in query_aux:
+            #             if '*' in t or '?' in t:
+            #                 f, t = t.split(':')
+            #                 query_aux[cont] = self.get_posting(t, f)
 
+            #             cont += 1
 
             # Tercero se procesan los multifield
+            if ':' in query:
+                if len(query_aux) == 1:
+                    procesado = True
+                    f, t = query_aux[0].split(':')
+                    query_aux[0] = [self.get_posting(t, f)]
+                else:
+                    a = ' '.join(query_aux)
+                    while ':' in a:
+                        cont = 0
+                        for t in query_aux:
+                            if ':' in t:
+                                f, t = t.split(':')
+                                query_aux[cont] = self.get_posting(t, f)
 
-            # Se resuelven las subconsultas
+                            cont += 1
+
+                        a = ' '.join(query_aux[cont + 1:])
+
+            # Si se busca solo una palabras
+            if len(query_aux) == 1 and isinstance(query_aux[0], str) and not procesado:
+                return self.get_posting(query_aux[0])
 
             # Primero se procesan los NOT
             while 'NOT' in query_aux:
                 pos = query_aux.index('NOT')
-                query_aux[pos] = self.reverse_posting(self.get_posting(query_aux[pos + 1]))
+                query_aux[pos] = self.reverse_posting(
+                    self.get_posting(query_aux[pos + 1]))
                 query_aux.pop(pos + 1)
 
             while 'AND' in query_aux or 'OR' in query_aux:
-                pos_and = 99999
-                pos_or = 99999
+                pos_and = 999999
+                pos_or = 999999
                 if 'AND' in query_aux:
                     pos_and = query_aux.index('AND')
                 if 'OR' in query_aux:
@@ -413,27 +487,32 @@ class SAR_Project:
 
                 if pos == pos_and:
                     if not isinstance(query_aux[pos - 1], list):
-                        query_aux[pos - 1] = self.get_posting(query_aux[pos - 1])
+                        query_aux[pos -
+                                  1] = self.get_posting(query_aux[pos - 1])
                     if not isinstance(query_aux[pos + 1], list):
-                        query_aux[pos + 1] = self.get_posting(query_aux[pos + 1])
-                    
-                    query_aux[pos] = self.and_posting(query_aux[pos - 1], query_aux[pos + 1])
+                        query_aux[pos +
+                                  1] = self.get_posting(query_aux[pos + 1])
+
+                    query_aux[pos] = self.and_posting(
+                        query_aux[pos - 1], query_aux[pos + 1])
                     query_aux.pop(pos + 1)
                     query_aux.pop(pos - 1)
 
                 else:
                     pos = query_aux.index('OR')
                     if not isinstance(query_aux[pos - 1], list):
-                        query_aux[pos - 1] = self.get_posting(query_aux[pos - 1])
+                        query_aux[pos -
+                                  1] = self.get_posting(query_aux[pos - 1])
                     if not isinstance(query_aux[pos + 1], list):
-                        query_aux[pos + 1] = self.get_posting(query_aux[pos + 1])
-                    
-                    query_aux[pos] = self.or_posting(query_aux[pos - 1], query_aux[pos + 1])
+                        query_aux[pos +
+                                  1] = self.get_posting(query_aux[pos + 1])
+
+                    query_aux[pos] = self.or_posting(
+                        query_aux[pos - 1], query_aux[pos + 1])
                     query_aux.pop(pos + 1)
                     query_aux.pop(pos - 1)
 
             return query_aux[0]
-
 
     def get_posting(self, term, field='article'):
         """
@@ -454,10 +533,10 @@ class SAR_Project:
         """
         res = []
 
-        if self.positional and '"' in term:
+        if '"' in term:
             aux = term.split('"')
             res = self.get_positionals(aux[1].split(' '), field)
-        elif self.permuterm and ('*' in term or '?' in term):
+        elif '*' in term or '?' in term:
             res = self.get_permuterm(term, field)
         elif self.stemming:
             res = self.get_stemming(term, field)
@@ -466,7 +545,6 @@ class SAR_Project:
                 res = list(self.index[field][term].keys())
 
         return res
-
 
     def get_positionals(self, terms, field='article'):
         """
@@ -502,7 +580,6 @@ class SAR_Project:
 
         return res
 
-
     def get_stemming(self, term, field='article'):
         """
         NECESARIO PARA LA AMPLIACION DE STEMMING
@@ -516,16 +593,14 @@ class SAR_Project:
 
         """
         stem = self.stemmer.stem(term)
-        res = set()
+        res = []
 
         if stem in self.sindex[field]:
             for token in self.sindex[field][stem]:
-                res.update(set(self.index[field][token].keys()))
+                res = self.or_posting(
+                    res, list(self.index[field][token].keys()))
 
-        res = list(res)
-        res.sort()
         return res
-
 
     def get_permuterm(self, term, field='article'):
         """
@@ -539,18 +614,24 @@ class SAR_Project:
         return: posting list
 
         """
-        res = set()
+        res = []
+        if '*' in term:
+            term_a, term_b = term.split('*')
+        else:
+            term_a, term_b = term.split('?')
 
+        term_a = term_a + '$'
+        term_b = '$' + term_b
+        
+        terms = [term_a, term_b]
         # Se hace la unión de las diferentes posting list de cada termino al que apunta un indice permuterm
-        if term in self.ptindex[field]:
-            for token in self.ptindex[field][term]:
-                res.update(set(self.index[field][token].keys()))
+        for term in terms:
+            if term in self.ptindex[field]:
+                for token in self.ptindex[field][term]:
+                    res = self.or_posting(
+                        res, list(self.index[field][token].keys()))
 
-        res = list(res)
-        res.sort()
         return res
-
-
 
 
     def reverse_posting(self, p):
@@ -573,10 +654,8 @@ class SAR_Project:
         for post in p:
             # Eliminamos la noticia de la lista de todas las noticias
             res.remove(post)
-        
+
         return res
-
-
 
 
     def and_posting(self, p1, p2):
@@ -596,17 +675,16 @@ class SAR_Project:
         j = 0
         # El pseudocodigo de teoria pasado a Python
         while i < len(p1) and j < len(p2):
-            if p1[i] == p2[j] and p1[i] == p2[j]:
+            if p1[i] == p2[j]:
                 res.append(p1[i])
                 i += 1
                 j += 1
-            elif p1[i] == p2[j] and p1[i] < p2[j] or p1[i] < p2[j]:
+            elif p1[i] <= p2[j]:
                 i += 1
-            elif p1[i] == p2[j] and p1[i] > p2[j] or p1[i] > p2[j]:
+            elif p1[i] >= p2[j]:
                 j += 1
-        
-        return res
 
+        return res
 
 
     def or_posting(self, p1, p2):
@@ -627,14 +705,14 @@ class SAR_Project:
 
         # El pseudocodigo de teoria pasado a Python
         while i < len(p1) and j < len(p2):
-            if p1[i] == p2[j] and p1[i] == p2[j]:
+            if p1[i] == p2[j]:
                 res.append(p1[i])
                 i += 1
                 j += 1
-            elif p1[i] == p2[j] and p1[i] < p2[j] or p1[i] < p2[j]:
+            elif p1[i] <= p2[j]:
                 res.append(p1[i])
                 i += 1
-            elif p1[i] == p2[j] and p1[i] > p2[j] or p1[i] > p2[j]:
+            elif p1[i] >= p2[j]:
                 res.append(p2[j])
                 j += 1
 
@@ -645,7 +723,6 @@ class SAR_Project:
             res.append(p2[pos])
 
         return res
-
 
     def minus_posting(self, p1, p2):
         """
@@ -661,14 +738,10 @@ class SAR_Project:
 
         """
 
-        
         pass
         ########################################################
         ## COMPLETAR PARA TODAS LAS VERSIONES SI ES NECESARIO ##
         ########################################################
-
-
-
 
 
     #####################################
@@ -676,7 +749,6 @@ class SAR_Project:
     ### PARTE 2.2: MOSTRAR RESULTADOS ###
     ###                               ###
     #####################################
-
 
     def solve_and_count(self, query):
         """
@@ -692,7 +764,6 @@ class SAR_Project:
         result = self.solve_query(query)
         print("%s\t%d" % (query, len(result)))
         return len(result)  # para verificar los resultados (op: -T)
-
 
     def solve_and_show(self, query):
         """
@@ -711,37 +782,37 @@ class SAR_Project:
         """
         result = self.solve_query(query)
         if self.use_ranking:
-            result = self.rank_result(result, query)   
+            result = self.rank_result(result, query)
 
         print('========================================')
-        
+
         print('Query: \'{}\''.format(query))
         print('Number of results: {}'.format(len(result)))
 
         i = 1
         for new in result:
             aux = self.news[new]
-            
+
             with open(self.docs[self.news[new][0]]) as fh:
                 jlist = json.load(fh)
                 aux = jlist[self.news[new][1]]
 
             if not self.show_snippet:
-                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(i, self.ind_rank(result, query), new, aux['date'], aux['title'], aux['keywords']))
+                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(i, self.coseno_rank(
+                    result, query), new, aux['date'], aux['title'], aux['keywords']))
             else:
                 print('#{}'.format(i))
-                print('Score: {}'.format(self.ind_rank(result, query)))
+                print('Score: {}'.format(self.coseno_rank(result, query)))
                 print(new)
                 print('Date: {}'.format(aux['date']))
                 print('Title: {}'.format(aux['title']))
                 print('Keywords: {}'.format(aux['keywords']))
-                print('{}\n'.format(self.snippet(aux['article'], query)))
-            
+                print('{}\n'.format(self.snippet(aux, query)))
+
             i += 1
 
             if not self.show_all and i > self.SHOW_MAX:
                 break
-
 
     def rank_result(self, result, query):
         """
@@ -756,49 +827,77 @@ class SAR_Project:
         return: la lista de resultados ordenada
 
         """
-        return result
-        
-        ###################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE RANKING ##
-        ###################################################
+        res = []
 
+        for new in result:
+            res += (new, self.coseno_rank(new, query))
 
-    def ind_rank(self, result, query):
+        res.sort(key=lambda tup: tup[1])
+
+        return res
+
+    def coseno_rank(self, new, query):
+        '''
+        AMPLIACIÓN DE RANKING
+
+        Dada una noticia y una consulta, devuelve su similitud coseno en el rango [0, 1].
+        '''
         if not self.use_ranking:
             return 0
         else:
             return -1
 
-    
-
-    def snippet(self, text, query):
+    def snippet(self, new, query):
         '''
         Obtiene el snippet de una noticia.
         '''
-        if self.stemming:
-            words = self.stemmer.stem(text)
-            query = self.stemmer.stem(query)
-        else:
-            words = text.split(' ')
-            query = query.split(' ')
+        words = new['article'].split(' ')
+        query = query.split(' ')
 
-        snippet = ''
+        snippet = '"'
 
+        l_cont = 0
         for word in query:
+            local = words
+
             word = word.replace('"', '')
             word = word.replace('*', '')
             word = word.replace('(', '')
             word = word.replace(')', '')
             word = word.replace('?', '')
 
-            if word in words:
-                pos = words.index(word)
+            if ':' in word:
+                field, word = word.split(':')
+                if field == 'date':
+                    local = new[field].split('-')
+                elif field == 'keywords':
+                    local = new[field].split(',')
+                else:
+                    local = new[field].split(' ')
+
+            if word in local:
+                pos = local.index(word)
                 min_p = pos - 4
                 if min_p < 0:
                     min_p = 0
                 max_p = pos + 5
-                if max_p > len(words) - 1:
-                    max_p = len(words) - 1
-                snippet += "..." + " ".join(words[min_p:max_p]) + "...\n"
+                if max_p > len(local) - 1:
+                    max_p = len(local) - 1
 
-        return snippet
+                snippet_aux = ''
+                if min_p > 0:
+                    snippet_aux += '...'
+
+                snippet_aux += " ".join(local[min_p:max_p + 1])
+
+                if max_p < len(local) - 1:
+                    snippet_aux += '...'
+
+                l_cont += 1
+
+                if l_cont != len(query) - 1 and len(query) > 1 and len(snippet_aux.lstrip()) > 0:
+                    snippet_aux += '\n'
+
+                snippet += snippet_aux
+
+        return snippet + '"'

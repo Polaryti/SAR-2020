@@ -161,11 +161,10 @@ class SAR_Project:
                     fullname = os.path.join(dir, filename)
                     self.index_file(fullname)
 
-        ##########################################
-        ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
-        ##########################################
+        # Si se activa la función de stemming
         if self.stemming:
             self.make_stemming()
+        # Si se activa la función de permuterm
         if self.permuterm:
             self.make_permuterm()
 
@@ -185,7 +184,6 @@ class SAR_Project:
 
 
         """
-        # IMPORTANTE: Se ha implementado el extra 'multifield' y 'positional'
         # Un fichero esta compuesto por noticias, cada noticia por cinco campos y cada campo por unos tokens
         with open(filename) as fh:
             jlist = json.load(fh)
@@ -197,32 +195,36 @@ class SAR_Project:
                 # Se añade al diccionario de noticias la noticia con clave -> self.new_cont, valor -> (filename, contador_noticia)
                 self.news[self.new_cont] = [self.doc_cont, contador_noticia]
 
-                # Campos a tratar
+                # Si se activa la función de multifield
                 if self.multifield:
                     multifield = ['title', 'date',
                                   'keywords', 'article', 'summary']
+                # Si no, se procesa article y date (nos interesa para una métrica posterior)
                 else:
                     multifield = ['article', 'date']
+                # Se tokeniza el cotenido de cada campo (menos el de date)
                 for field in multifield:
-                    # Se tokeniza el cotenido de cada campo (menos el de date)
                     if field != 'date':
                         contenido = self.tokenize(noticia[field])
                     else:
                         contenido = [noticia[field]]
                     # Contador de la posición de un token en una noticia
+                    # Por simplicidad (y porque no aumenta mucho el tiempo) el indice creado ya es posicional
+                    # Se ha conseguido guardando en cada entrada de un termino un diccionario noticia -> posiciones
                     posicion_token = 0
                     for token in contenido:
                         # Si el token no esta en el diccionario de tokens, se añade
                         if token not in self.index[field]:
                             self.index[field][token] = {
                                 self.new_cont: [posicion_token]}
-                        # Si el token esta ya
+                        # Si el token esta ya...
                         else:
-                            # Si no existe la noticia en el token
+                            # ...si no existe la noticia en el token, se añade
                             if self.new_cont not in self.index[field][token]:
-                                self.index[field][token][self.new_cont] = [posicion_token]
+                                self.index[field][token][self.new_cont] = [
+                                    posicion_token]
                             else:
-                                # Se añade a la entrada del token-noticia la posición donde se ha encontrado
+                                # Si no, se añade a la entrada del token-noticia la posición donde se ha encontrado
                                 self.index[field][token][self.new_cont] += [posicion_token]
 
                         posicion_token += 1
@@ -256,12 +258,15 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        # Campos a tratar
+        # Si se activa la función multifield
         if self.multifield:
             multifield = ['title', 'date', 'keywords', 'article', 'summary']
         else:
             multifield = ['article']
+
         for field in multifield:
+            # Se aplica stemming a cada token del self.index[field] y se añade al indice de stems
+            # En este caso solo se guarda la noticia, no la posición
             for token in self.index[field].keys():
                 token_s = self.stemmer.stem(token)
                 if token_s not in self.sindex[field]:
@@ -277,12 +282,14 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        # Campos a tratar
+        # Si se activa la función multifield
         if self.multifield:
             multifield = ['title', 'date', 'keywords', 'article', 'summary']
         else:
             multifield = ['article']
         for field in multifield:
+            # Se crea la lista de permuterms de un token
+            # En este caso solo se guarda la noticia, no la posición
             for token in self.index[field]:
                 token_p = token + '$'
                 permuterm = []
@@ -304,7 +311,7 @@ class SAR_Project:
         Muestra estadisticas de los indices
         
         """
-        # Campos a tratar
+        # Si se activa la función multifield
         if self.multifield:
             multifield = ['title', 'date', 'keywords', 'article', 'summary']
         else:
@@ -360,6 +367,9 @@ class SAR_Project:
         return: posting list con el resultado de la query
 
         """
+
+        # Una 'primera' implementación más enreversada, pero más detallada
+        '''
         # Preprocesamiento de la consulta
         query = query.replace('(', ' ( ')
         query = query.replace(')', ' ) ')
@@ -369,9 +379,10 @@ class SAR_Project:
 
         # Resolver consulta (por prioridades)
         # 1º: Resolver parentesis (de manera recursiva, si procede)
+        # Solo resuelve parentesis simples
         if '(' in query:
             number_of_subqueries = query.count('(')
-            while number_of_subqueries > 0:
+            while query.count('(') > 0:
                 aux_number_of_subqueries = 0
                 start_position_of_subquery = query.index('(')
                 end_position_of_subquery = start_position_of_subquery + 1
@@ -385,8 +396,10 @@ class SAR_Project:
                     elif query[end_position_of_subquery] == ')' and aux_number_of_subqueries == 0:
                         subquery = ' '.join(
                             query[start_position_of_subquery + 1:end_position_of_subquery])
-                        query = query[:start_position_of_subquery] + self.solve_query(
-                            subquery) + query[end_position_of_subquery + 1:]
+                        answer = self.solve_query(subquery)
+                        # if len(answer[0]) > 0 and isinstance(answer[0][0], list):
+                        #     answer = answer[0]
+                        query = query[:start_position_of_subquery] + answer + query[end_position_of_subquery + 1:]
                         subquery_solved = True
                         # Si la consulta son varios parentesis seguidos
                         if len(query) == 0 or not isinstance(query[0], str):
@@ -421,7 +434,7 @@ class SAR_Project:
             while number_of_multifields > 0:
                 position_of_multifield = query.index(':')
                 query[position_of_multifield] = self.get_posting(
-                    query[position_of_multifield + 1], query[position_of_multifield - 1])
+                    query[position_of_multifield + 1].lower(), query[position_of_multifield - 1])
                 query.pop(position_of_multifield + 1)
                 query.pop(position_of_multifield - 1)
                 number_of_multifields -= 1
@@ -431,8 +444,12 @@ class SAR_Project:
             number_of_nots = query.count('NOT')
             while number_of_nots > 0:
                 position_of_not = query.index('NOT')
-                query[position_of_not] = self.reverse_posting(
-                    query.pop(position_of_not + 1))
+                if isinstance(query[position_of_not + 1], str): 
+                    query[position_of_not] = self.reverse_posting(
+                        self.get_posting(query.pop(position_of_not + 1).lower()))
+                else:
+                    query[position_of_not] = self.reverse_posting(query.pop(position_of_not + 1))
+
                 number_of_nots -= 1
 
         # 5º: Terminar de resolver la consulta (una palabra, AND's y OR's)
@@ -453,38 +470,144 @@ class SAR_Project:
                 query[0] = self.or_posting(postinglist_a, postinglist_b)
                 query.pop(2)
                 query.pop(1)
+            
 
         if isinstance(query[0], str):
             query[0] = self.get_posting(query[0])
 
         return query[0]
+        '''
 
-    def get_posting(self, term, field='article'):
+        # La implementación final más concisa y eficiente
+        if query is None or len(query) == 0:
+            return []
+
+        res = []
+
+        # Preprocesamiento de la consulta
+        query = query.replace('"', '')
+        query = query.replace('(', ' ( ')
+        query = query.replace(')', ' ) ')
+        q = query.split()
+
+        # Bucle que realiza, primeramente, las funcionalidades extra
+        i = 0
+        while i < len(q):
+            term = q[i]
+            # 1º Subconcultas y subconsultas anidadas (de forma iterativa)
+            if term == '(':
+                i += 1
+                q2 = ''
+                aux = 0
+                while aux >= 0:
+                    if q[i] == '(':
+                        aux += 1
+                    if q[i] == ')':
+                        aux -= 1
+                    q2 += q[i] + ' '
+                    i += 1
+                q2 = q2.strip()
+                q2 = q2[0:len(q2) - 1]
+                res.append(self.solve_query(q2))
+            else:
+                # 2º Consultas multifield
+                if ':' in term:
+                    field = term[0:term.find(':')]
+                    term = term[term.find(':') + 1:]
+                else:
+                    field = 'article'
+                # Se codifica los conectores básicos para un posterior tratado
+                if term == 'AND':
+                    res += [1]
+                    i += 1
+                elif term == 'OR':
+                    res += [0]
+                    i += 1
+                elif term == 'NOT':
+                    res += [-1]
+                    i += 1
+                else:
+                    # 3º Consultas permuterm (wildcard query)
+                    term = term.lower()
+                    if '*' in term:
+                        res.append(self.get_permuterm(term, field))
+                        i += 1
+                    elif '?' in term:
+                        res.append(self.get_permuterm(term, field))
+                        i += 1
+                    else:
+                        # 4º Consultas posicionales
+                        aux = 0
+                        terms = []
+                        while (i + aux) < len(q) and q[i + aux] != 'AND' and q[i + aux] != 'OR' and q[i + aux] != 'NOT':
+                            terms.append(q[i + aux])
+                            aux += 1
+                        if len(terms) == 1:
+                            if self.use_stemming:
+                                res.append(self.get_stemming(term, field))
+                            else:
+                                res.append(self.get_posting(term, field))
+                            i += 1
+                        else:
+                            res.append(self.get_positionals(terms, field))
+                            i += aux
+
+        # Bucle que realiza, en segundo lugar, las funcionalidades básicas
+        ret = []
+        i = 0
+        while i < len(res):
+            # Según la codificación anterior realiza NOT o AND o OR, respectivamente
+            r = res[i]
+            if r == 1:
+                if res[i + 1] == -1:
+                    seg = self.reverse_posting(res[i + 2])
+                    i += 3
+                else:
+                    seg = res[i + 1]
+                    i += 2
+                ret = self.and_posting(ret, seg)
+            elif r == 0:
+                if res[i + 1] == -1:
+                    seg = self.reverse_posting(res[i + 2])
+                    i += 3
+                else:
+                    seg = res[i + 1]
+                    i += 2
+                ret = self.or_posting(ret, seg)
+            elif r == -1:
+                ret = self.reverse_posting(res[i + 1])
+                i += 2
+            else:
+                ret = r
+                i += 1
+
+        return ret
+
+    def get_posting(self, term, field='article', wildcard='False'):
         """
         NECESARIO PARA TODAS LAS VERSIONES
 
         Devuelve la posting list asociada a un termino. 
         Dependiendo de las ampliaciones implementadas "get_posting" puede llamar a:
-            - self.get_positionals: para la ampliacion de posicionales
             - self.get_permuterm: para la ampliacion de permuterms
             - self.get_stemming: para la amplaicion de stemming
 
 
         param:  "term": termino del que se debe recuperar la posting list.
                 "field": campo sobre el que se debe recuperar la posting list, solo necesario se se hace la ampliacion de multiples indices
-
+                "wildcard": indica si es una consulta widlcard (no hay que realizar stemming si esta activada la opción)
         return: posting list
 
         """
         res = []
 
-        if '"' in term:
-            aux = term.split('"')
-            res = self.get_positionals(aux[1].split(' '), field)
-        elif '*' in term or '?' in term:
+        # Posting list de una wildcard query
+        if '*' in term or '?' in term:
             res = self.get_permuterm(term, field)
-        elif self.stemming:
+        # Posting list de un stem
+        elif self.use_stemming and not wildcard:
             res = self.get_stemming(term, field)
+        # Posting list de un termino
         else:
             if term in self.index[field]:
                 res = list(self.index[field][term].keys())
@@ -504,24 +627,25 @@ class SAR_Project:
 
         """
         res = []
-
+        # NO FUNCIONA BIEN
         # Se comprueba que se ha indexado el primer termino
         if terms[0] in self.index[field]:
             # Se recorre la posting list del primer termino (quitando el número de documentos)
             for post in self.index[field][terms[0]].items():
                 seguido = True
                 # Obtenemos la noticia y la posición
-                new, pos = post
+                new, list_pos = post
                 # Se comprueba que, para los siguientes terminos, eixste una entrada con ese noticia y una posición más
-                for term in terms[1:] and seguido:
-                    if term in self.index[field]:
-                        if new in self.index[field][term]:
-                            if pos + 1 in self.index[field][term][new]:
-                                pos += 1
-                            else:
-                                seguido = False
+                for position in list_pos:
+                    for term in (term for term in terms[1:] if seguido):
+                        if term in self.index[field]:
+                            if new in self.index[field][term]:
+                                if position + 1 in self.index[field][term][new]:
+                                    position += 1
+                                else:
+                                    seguido = False
                 if seguido:
-                    res += new
+                    res += [new]
 
         return res
 
@@ -537,11 +661,14 @@ class SAR_Project:
         return: posting list
 
         """
+        # Se obtiene el stem de un término
         stem = self.stemmer.stem(term)
         res = []
 
+        # Se hace la unión de las posting list de cada termino que contenga la entrada en el indice de stems
         if stem in self.sindex[field]:
             for token in self.sindex[field][stem]:
+                # Se utiliza el OR propio por eficiencia
                 res = self.or_posting(
                     res, list(self.index[field][token].keys()))
 
@@ -561,6 +688,7 @@ class SAR_Project:
         """
         res = []
 
+        # Se construye la wildcard query del termino comodín
         term += '$'
         while term[-1] != '*' and term[-1] != '?':
             term = term[1:] + term[0]
@@ -569,9 +697,14 @@ class SAR_Project:
         term = term[:-1]
 
         # Se hace la unión de las diferentes posting list de cada termino al que apunta un indice permuterm
+        # Si el comodin es '*', se busca todos los permuterms que comienzen por la wildcar query
+        # Si el comidin es '?', lo mismo pero que ademas la longitud sea igual a la del término original
         for permuterm in (x for x in list(self.ptindex[field].keys()) if x.startswith(term) and (simbolo == '*' or len(x) == len(term) + 1)):
             for token in self.ptindex[field][permuterm]:
-                res = self.or_posting(res, self.get_posting(token, field))
+                # Se utiliza el OR propio por eficiencia
+                # Se activa el campor wildcard=True para evitar que haga el stem de cada término
+                res = self.or_posting(res, self.get_posting(
+                    token, field, wildcard=True))
 
         return res
 
@@ -663,7 +796,6 @@ class SAR_Project:
 
         return res
 
-
     #####################################
     ###                               ###
     ### PARTE 2.2: MOSTRAR RESULTADOS ###
@@ -702,9 +834,7 @@ class SAR_Project:
         """
         result = self.solve_query(query)
         if self.use_ranking:
-            query_procesed = query.replace('AND', '')
-            query_procesed = query_procesed.replace('OR', '')
-            result = self.rank_result(result, query_procesed)
+            result = self.rank_result(result, query)
 
         print('========================================')
 
@@ -719,12 +849,18 @@ class SAR_Project:
                 jlist = json.load(fh)
                 aux = jlist[self.news[new][1]]
 
+            if self.use_ranking:
+                puntuacion = self.jaccard(query, aux)
+            else:
+                puntuacion = 0
+
+            # Si esta activada la función de snippets
             if not self.show_snippet:
-                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(i, self.jaccard(
-                    query, aux['article']), new, aux['date'], aux['title'], aux['keywords']))
+                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(
+                    i, puntuacion, new, aux['date'], aux['title'], aux['keywords']))
             else:
                 print('#{}'.format(i))
-                print('Score: {}'.format(self.jaccard(result, query)))
+                print('Score: {}'.format(puntuacion))
                 print(new)
                 print('Date: {}'.format(aux['date']))
                 print('Title: {}'.format(aux['title']))
@@ -749,70 +885,132 @@ class SAR_Project:
         return: la lista de resultados ordenada
 
         """
+        # Preprocesamos la consulta de términos que no queremos puntuar
+        query = query.replace('AND', '')
+        query = query.replace('OR', '')
+        query = query.replace('NOT ', 'NOT')
+        query = query.replace(':', ' ')
+
         res = []
 
+        # Para cada noticia se obtiene su puntuación de Jaccard
+        # Se realiza, por cada noticia, una insercción tupla (noticia, puntuación)
         for new in result:
             with open(self.docs[self.news[new][0]]) as fh:
                 jlist = json.load(fh)
                 aux = jlist[self.news[new][1]]
-            res.append([new, self.jaccard(aux['article'], query)])
 
+            res.append([new, self.jaccard(query, aux)])
+
+        # Se ordena la lista de noticias según la puntuación
         res.sort(key=lambda tup: tup[1], reverse=True)
 
+        # Se devuelven solo las noticias
         return [i[0] for i in res]
 
     def jaccard(self, query, documento):
         '''
-        Obtiene la métrica de Jaccard para una consulta y un documento
-        '''
-        query = set(query.split())
-        documento = set(documento.split())
-        return round(len(query.intersection(documento)) / len(query.union(documento)), 6)
+        Obtiene la métrica de Jaccard para una consulta y un documento (revisa todos los campos).
+        Si la función de multifield está activada, realiza la combinación de la métrica de Jaccard para todos los campos.
+        Se define la métrica de Jaccard como Jaccard(A, B) = A inter B / A union B.
+        La métrica oscilara entre [1, 0] o [5, 0] si es multifield.
 
+        param:  "query": query procesada
+                "documento": la noticia, con todos sus campos
+
+
+        return: la métrica de un par consulta - documento
+        '''
+        query = set(self.tokenize(query))
+
+        metrica_total = 0
+
+        # Si la función de multifield está activada
+        if self.multifield:
+            for field in ['title', 'article', 'date', 'keywords', 'summary']:
+                # Se trabajan con sets porqué contienen metodos útiles para esta implementación
+                if field != 'date':
+                    documento_aux = set(self.tokenize(documento[field]))
+                else:
+                    documento_aux = set([documento[field]])
+
+                metrica_total += len(query.intersection(documento_aux)
+                                     ) / len(query.union(documento_aux))
+        else:
+            documento = set(self.tokenize(documento['article']))
+            metrica_total = len(query.intersection(
+                documento)) / len(query.union(documento))
+
+        # Como las consultas son cortas y los documentos, en comparación, largos
+        # se toman 6 decimales para porder comparar bien
+        return round(metrica_total, 6)
 
     def snippet(self, new, query):
         '''
         Obtiene el snippet de una noticia.
-        '''
-        words = new['article'].split(' ')
-        query = query.split(' ')
 
+        param:  "new": la noticia, con todos sus campos
+                "query": query sin procesar
+
+
+        return: la métrica de un par consulta - documento
+        '''
+        words = self.tokenize(new['article'])
+        # Se preprocesa la consulta
+        query = query.replace('"', '')
+        query = query.replace('*', '')
+        query = query.replace('(', '')
+        query = query.replace(')', '')
+        query = query.replace('?', '')
+        # Palabra rara para tener en cuenta campo multifield
+        query = query.replace(':', 'HZMPOSICIONAL')
+        query = self.tokenize(query)
+
+        # A diferencia del ejemplo, se ha optado por enmarcar el snippet en " "
         snippet = '"'
 
         l_cont = 0
+        # Intentamos obtener un fragmento para cada término relevante de la query
+        # No siempre es posible por la naturaleza de los conectores y las ampliaciones (los permuterms es díficil que consiga algo)
         for word in query:
             local = words
+            local_sin_procesar = new['article'].split()
 
-            word = word.replace('"', '')
-            word = word.replace('*', '')
-            word = word.replace('(', '')
-            word = word.replace(')', '')
-            word = word.replace('?', '')
+            # Si un término es consulta multifield, la generación del
+            # snippet para ese término se hará en ese campo
+            if 'HZMPOSICIONAL' in word:
+                field, word = word.split('HZMPOSICIONAL')
+                # No hay que tokenizar la fecha
+                if field != 'date':
+                    if field == 'keywords':
+                        local_sin_procesar = new[field].split(',')
+                    else:
+                        local_sin_procesar = new[field].split()
+                    local = self.tokenize(new[field])
+                    
 
-            if ':' in word:
-                field, word = word.split(':')
-                if field == 'date':
-                    local = new[field].split('-')
-                elif field == 'keywords':
-                    local = new[field].split(',')
-                else:
-                    local = new[field].split(' ')
-
+            # Por defecto se busca en 'article' pero por si es multifield
+            # se realiza la copia local
             if word in local:
+                # Se obtiene la primera ocurrencia del término (si esta)
+                # y se obtiene un fragmento anterior y posterior.
+                # Se tiene en cuenta si está al principio o al final
                 pos = local.index(word)
                 min_p = pos - 4
                 if min_p < 0:
                     min_p = 0
                 max_p = pos + 5
-                if max_p > len(local) - 1:
-                    max_p = len(local) - 1
+                if max_p > len(local_sin_procesar) - 1:
+                    max_p = len(local_sin_procesar) - 1
 
+                # Si el fragmento no está al principio
                 snippet_aux = ''
                 if min_p > 0:
                     snippet_aux += '...'
 
-                snippet_aux += " ".join(local[min_p:max_p + 1])
+                snippet_aux += " ".join(local_sin_procesar[min_p:max_p + 1])
 
+                # Si el fragmento no está al final
                 if max_p < len(local) - 1:
                     snippet_aux += '...'
 

@@ -72,7 +72,6 @@ class SAR_Project:
         self.doc_cont = 0
         self.new_cont = 0
 
-
     ###############################
     ###                         ###
     ###      CONFIGURACION      ###
@@ -134,7 +133,6 @@ class SAR_Project:
 
         """
         self.use_ranking = v
-
 
     ###############################
     ###                         ###
@@ -222,8 +220,7 @@ class SAR_Project:
                         else:
                             # Si no existe la noticia en el token
                             if self.new_cont not in self.index[field][token]:
-                                self.index[field][token][self.new_cont] = [
-                                    posicion_token]
+                                self.index[field][token][self.new_cont] = [posicion_token]
                             else:
                                 # Se añade a la entrada del token-noticia la posición donde se ha encontrado
                                 self.index[field][token][self.new_cont] += [posicion_token]
@@ -235,7 +232,6 @@ class SAR_Project:
                 contador_noticia += 1
 
             self.doc_cont += 1
-
 
     def tokenize(self, text):
         """
@@ -250,7 +246,6 @@ class SAR_Project:
 
         """
         return self.tokenizer.sub(' ', text.lower()).split()
-
 
     def make_stemming(self):
         """
@@ -274,6 +269,7 @@ class SAR_Project:
                 else:
                     if token not in self.sindex[field][token_s]:
                         self.sindex[field][token_s] += [token]
+
     def make_permuterm(self):
         """
         NECESARIO PARA LA AMPLIACION DE PERMUTERM
@@ -349,7 +345,7 @@ class SAR_Project:
     ###                             ###
     ###################################
 
-    def solve_query(self, query, prev={}):
+    def solve_query(self, query):
         """
         NECESARIO PARA TODAS LAS VERSIONES
 
@@ -364,155 +360,104 @@ class SAR_Project:
         return: posting list con el resultado de la query
 
         """
-        # De momento se asume que solo hay NOT, AND y OR
-        if query is None or len(query) == 0:
-            return []
-        else:
-            query_aux = query.split(' ')
-            procesado = False
+        # Preprocesamiento de la consulta
+        query = query.replace('(', ' ( ')
+        query = query.replace(')', ' ) ')
+        query = query.replace(':', ' : ')
+        query = query.replace('"', ' " ')
+        query = query.split()
 
-            # Primero se resuelven las subconsultas (de forma recursiva por si hay parentesis anidados).
-            # Al final, un (...), se transforma en un posting list ([...])
-            if '(' in query:
-                total_subs = query.count('(')
-                while total_subs > 0 and '(' in ' '.join(query_aux):
-                    print(query_aux)
-                    cont = 0
-                    encontrado = False
-                    for t in (x for x in query_aux if not encontrado):
-                        # Una sola palabra (este caso es sucio, pero bueno...)
-                        if t.count('(') + t.count(')') == 2:
-                            t = t.replace('(', '')
-                            t = t.replace(')', '')
-                            query_aux[cont] = self.get_posting(t)
-                            encontrado = True
-                            total_subs -= 1
-                        else:
-                            print('NO')
-                            s_cont = 1
-                            ani_cont = 0
-                            while not encontrado:
-                                if '(' in query_aux[cont + s_cont]:
-                                    ani_cont += 1
-                                if ')' in query_aux[cont + s_cont]:
-                                    if ani_cont > 0:
-                                        ani_cont -= 1
-                                    else:
-                                        query_aux[cont] = query_aux[cont].replace(
-                                            '(', '')
-                                        query_aux[s_cont + cont] = query_aux[s_cont +
-                                                                             cont].replace(')', '')
-                                        query_aux = query_aux[:cont] + self.solve_query(
-                                            ' '.join(query_aux[cont: s_cont + cont + 1])) + query_aux[cont + s_cont + 1:]
-                                        encontrado = True
-                                        total_subs -= 1
+        # Resolver consulta (por prioridades)
+        # 1º: Resolver parentesis (de manera recursiva, si procede)
+        if '(' in query:
+            number_of_subqueries = query.count('(')
+            while number_of_subqueries > 0:
+                aux_number_of_subqueries = 0
+                start_position_of_subquery = query.index('(')
+                end_position_of_subquery = start_position_of_subquery + 1
+                subquery_solved = False
 
-                                s_cont += 1
+                while not subquery_solved:
+                    if query[end_position_of_subquery] == '(':
+                        aux_number_of_subqueries += 1
+                    elif query[end_position_of_subquery] == ')' and aux_number_of_subqueries > 0:
+                        aux_number_of_subqueries -= 1
+                    elif query[end_position_of_subquery] == ')' and aux_number_of_subqueries == 0:
+                        subquery = ' '.join(
+                            query[start_position_of_subquery + 1:end_position_of_subquery])
+                        query = query[:start_position_of_subquery] + self.solve_query(
+                            subquery) + query[end_position_of_subquery + 1:]
+                        subquery_solved = True
+                        # Si la consulta son varios parentesis seguidos
+                        if len(query) == 0 or not isinstance(query[0], str):
+                            return query
 
-                        cont += 1
+                    end_position_of_subquery += 1
 
-            # Luego los posicionals ('"...""')
-            if '"' in query:
-                print('Pos')
-                while '"' in ' '.join(query_aux):
-                    cont = 0
-                    for t in query_aux:
-                        # Una positional de una sola palabra (este caso es sucio, pero bueno...)
-                        if t.count('"') == 2:
-                            query_aux[cont] = self.get_posting(query_aux[cont])
-                        else:
-                            s_cont = 1
-                            while not ('"') in query_aux[cont + s_cont]:
-                                s_cont += 1
+                number_of_subqueries -= 1
 
-                            query_aux = query_aux[:cont] + self.get_posting(
-                                ' '.join(query_aux[cont: s_cont + cont + 1])) + query_aux[cont + s_cont + 1:]
-                            break
+        # 2º: Resolver consultas posicionales
+        if '"' in query:
+            number_of_positionals = query.count('"') / 2
+            while number_of_positionals > 0:
+                start_position_of_positional = query.index('(')
+                end_position_of_positional = start_position_of_positional + 2
+                positional_solved = False
+                while not positional_solved:
+                    if query[end_position_of_positional] == '"':
+                        query[start_position_of_positional] = self.get_posting(
+                            ' '.join(query[start_position_of_positional: end_position_of_positional + 1]))
+                        query = query[:start_position_of_positional +
+                                      1] + query[end_position_of_positional + 1:]
+                        positional_solved = True
 
-                        cont += 1
+                    end_position_of_positional += 1
 
-                    a = ' '.join(query_aux[cont + 1:])
+                number_of_positionals -= 1
 
-            # Segundo se procesan los comodines
-            # PUEDE QUE SE HAGA SOLO YA
-            # if '*' in query or '?' in query:
-            #     while '"' in ' '.join(query_aux) or '?' in ' '.join(query_aux):
-            #         cont = 0
-            #         for t in query_aux:
-            #             if '*' in t or '?' in t:
-            #                 f, t = t.split(':')
-            #                 query_aux[cont] = self.get_posting(t, f)
+        # 3º: Resolver consultas multifield
+        if ':' in query:
+            number_of_multifields = query.count(':')
+            while number_of_multifields > 0:
+                position_of_multifield = query.index(':')
+                query[position_of_multifield] = self.get_posting(
+                    query[position_of_multifield + 1], query[position_of_multifield - 1])
+                query.pop(position_of_multifield + 1)
+                query.pop(position_of_multifield - 1)
+                number_of_multifields -= 1
 
-            #             cont += 1
+        # 4º: Resolver consultas NOT
+        if 'NOT' in query:
+            number_of_nots = query.count('NOT')
+            while number_of_nots > 0:
+                position_of_not = query.index('NOT')
+                query[position_of_not] = self.reverse_posting(
+                    query.pop(position_of_not + 1))
+                number_of_nots -= 1
 
-            # Tercero se procesan los multifield
-            if ':' in query:
-                if len(query_aux) == 1:
-                    procesado = True
-                    f, t = query_aux[0].split(':')
-                    query_aux[0] = [self.get_posting(t, f)]
-                else:
-                    a = ' '.join(query_aux)
-                    while ':' in a:
-                        cont = 0
-                        for t in query_aux:
-                            if ':' in t:
-                                f, t = t.split(':')
-                                query_aux[cont] = self.get_posting(t, f)
+        # 5º: Terminar de resolver la consulta (una palabra, AND's y OR's)
+        while len(query) > 1:
+            postinglist_a = query[0]
+            postinglist_b = query[2]
+            if isinstance(postinglist_a, str):
+                postinglist_a = self.get_posting(postinglist_a)
+            if isinstance(postinglist_b, str):
+                postinglist_b = self.get_posting(postinglist_b)
 
-                            cont += 1
+            if query[1] == 'AND':
+                query[0] = self.and_posting(postinglist_a, postinglist_b)
+                query.pop(2)
+                query.pop(1)
 
-                        a = ' '.join(query_aux[cont + 1:])
+            elif query[1] == 'OR':
+                query[0] = self.or_posting(postinglist_a, postinglist_b)
+                query.pop(2)
+                query.pop(1)
 
-            # Si se busca solo una palabras
-            if len(query_aux) == 1 and isinstance(query_aux[0], str) and not procesado:
-                return self.get_posting(query_aux[0])
+        if isinstance(query[0], str):
+            query[0] = self.get_posting(query[0])
 
-            # Primero se procesan los NOT
-            while 'NOT' in query_aux:
-                pos = query_aux.index('NOT')
-                query_aux[pos] = self.reverse_posting(
-                    self.get_posting(query_aux[pos + 1]))
-                query_aux.pop(pos + 1)
-
-            while 'AND' in query_aux or 'OR' in query_aux:
-                pos_and = 999999
-                pos_or = 999999
-                if 'AND' in query_aux:
-                    pos_and = query_aux.index('AND')
-                if 'OR' in query_aux:
-                    pos_or = query_aux.index('OR')
-
-                pos = min(pos_and, pos_or)
-
-                if pos == pos_and:
-                    if not isinstance(query_aux[pos - 1], list):
-                        query_aux[pos -
-                                  1] = self.get_posting(query_aux[pos - 1])
-                    if not isinstance(query_aux[pos + 1], list):
-                        query_aux[pos +
-                                  1] = self.get_posting(query_aux[pos + 1])
-
-                    query_aux[pos] = self.and_posting(
-                        query_aux[pos - 1], query_aux[pos + 1])
-                    query_aux.pop(pos + 1)
-                    query_aux.pop(pos - 1)
-
-                else:
-                    pos = query_aux.index('OR')
-                    if not isinstance(query_aux[pos - 1], list):
-                        query_aux[pos -
-                                  1] = self.get_posting(query_aux[pos - 1])
-                    if not isinstance(query_aux[pos + 1], list):
-                        query_aux[pos +
-                                  1] = self.get_posting(query_aux[pos + 1])
-
-                    query_aux[pos] = self.or_posting(
-                        query_aux[pos - 1], query_aux[pos + 1])
-                    query_aux.pop(pos + 1)
-                    query_aux.pop(pos - 1)
-
-            return query_aux[0]
+        return query[0]
 
     def get_posting(self, term, field='article'):
         """
@@ -615,24 +560,20 @@ class SAR_Project:
 
         """
         res = []
-        if '*' in term:
-            term_a, term_b = term.split('*')
-        else:
-            term_a, term_b = term.split('?')
 
-        term_a = term_a + '$'
-        term_b = '$' + term_b
-        
-        terms = [term_a, term_b]
+        term += '$'
+        while term[-1] != '*' and term[-1] != '?':
+            term = term[1:] + term[0]
+
+        simbolo = term[-1]
+        term = term[:-1]
+
         # Se hace la unión de las diferentes posting list de cada termino al que apunta un indice permuterm
-        for term in terms:
-            if term in self.ptindex[field]:
-                for token in self.ptindex[field][term]:
-                    res = self.or_posting(
-                        res, list(self.index[field][token].keys()))
+        for permuterm in (x for x in list(self.ptindex[field].keys()) if x.startswith(term) and (simbolo == '*' or len(x) == len(term) + 1)):
+            for token in self.ptindex[field][permuterm]:
+                res = self.or_posting(res, self.get_posting(token, field))
 
         return res
-
 
     def reverse_posting(self, p):
         """
@@ -656,7 +597,6 @@ class SAR_Project:
             res.remove(post)
 
         return res
-
 
     def and_posting(self, p1, p2):
         """
@@ -685,7 +625,6 @@ class SAR_Project:
                 j += 1
 
         return res
-
 
     def or_posting(self, p1, p2):
         """
@@ -723,25 +662,6 @@ class SAR_Project:
             res.append(p2[pos])
 
         return res
-
-    def minus_posting(self, p1, p2):
-        """
-        OPCIONAL PARA TODAS LAS VERSIONES
-
-        Calcula el except de dos posting list de forma EFICIENTE.
-        Esta funcion se propone por si os es util, no es necesario utilizarla.
-
-        param:  "p1", "p2": posting lists sobre las que calcular
-
-
-        return: posting list con los newid incluidos de p1 y no en p2
-
-        """
-
-        pass
-        ########################################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES SI ES NECESARIO ##
-        ########################################################
 
 
     #####################################
@@ -782,7 +702,9 @@ class SAR_Project:
         """
         result = self.solve_query(query)
         if self.use_ranking:
-            result = self.rank_result(result, query)
+            query_procesed = query.replace('AND', '')
+            query_procesed = query_procesed.replace('OR', '')
+            result = self.rank_result(result, query_procesed)
 
         print('========================================')
 
@@ -798,11 +720,11 @@ class SAR_Project:
                 aux = jlist[self.news[new][1]]
 
             if not self.show_snippet:
-                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(i, self.coseno_rank(
-                    result, query), new, aux['date'], aux['title'], aux['keywords']))
+                print('#{:<4} ({}) ({}) ({}) {} ({})'.format(i, self.jaccard(
+                    query, aux['article']), new, aux['date'], aux['title'], aux['keywords']))
             else:
                 print('#{}'.format(i))
-                print('Score: {}'.format(self.coseno_rank(result, query)))
+                print('Score: {}'.format(self.jaccard(result, query)))
                 print(new)
                 print('Date: {}'.format(aux['date']))
                 print('Title: {}'.format(aux['title']))
@@ -830,22 +752,23 @@ class SAR_Project:
         res = []
 
         for new in result:
-            res += (new, self.coseno_rank(new, query))
+            with open(self.docs[self.news[new][0]]) as fh:
+                jlist = json.load(fh)
+                aux = jlist[self.news[new][1]]
+            res.append([new, self.jaccard(aux['article'], query)])
 
-        res.sort(key=lambda tup: tup[1])
+        res.sort(key=lambda tup: tup[1], reverse=True)
 
-        return res
+        return [i[0] for i in res]
 
-    def coseno_rank(self, new, query):
+    def jaccard(self, query, documento):
         '''
-        AMPLIACIÓN DE RANKING
-
-        Dada una noticia y una consulta, devuelve su similitud coseno en el rango [0, 1].
+        Obtiene la métrica de Jaccard para una consulta y un documento
         '''
-        if not self.use_ranking:
-            return 0
-        else:
-            return -1
+        query = set(query.split())
+        documento = set(documento.split())
+        return round(len(query.intersection(documento)) / len(query.union(documento)), 6)
+
 
     def snippet(self, new, query):
         '''

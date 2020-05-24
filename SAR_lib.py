@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import json
 from nltk.stem.snowball import SnowballStemmer
 import os
@@ -41,15 +39,13 @@ class SAR_Project:
                       'keywords': {},
                       'article': {},
                       'summary': {}
-                      }  # hash para el indice invertido de terminos --> clave: termino, valor: posting list.
-        # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
-        # self.index['title'] seria el indice invertido del campo 'title'.
+                      }  # hash para el indice invertido de terminos --> clave: termino, valor: posting list / ocurrencias.
         self.sindex = {'title': {},
                        'date': {},
                        'keywords': {},
                        'article': {},
                        'summary': {}
-                       }  # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
+                       }  # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem.
         self.ptindex = {'title': {},
                         'date': {},
                         'keywords': {},
@@ -58,8 +54,6 @@ class SAR_Project:
                         }  # hash para el indice permuterm.
         # diccionario de terminos --> clave: entero(docid),  valor: ruta del fichero.
         self.docs = {}
-        # hash de terminos para el pesado, ranking de resultados. puede no utilizarse
-        self.weight = {}
         # hash de noticias --> clave entero (newid), valor: la info necesaria para diferencia la noticia dentro de su fichero
         self.news = {}
         # expresion regular para hacer la tokenizacion
@@ -209,23 +203,31 @@ class SAR_Project:
                     else:
                         contenido = [noticia[field]]
                     # Contador de la posición de un token en una noticia
-                    # Por simplicidad (y porque no aumenta mucho el tiempo) el indice creado ya es posicional
-                    # Se ha conseguido guardando en cada entrada de un termino un diccionario noticia -> posiciones
                     posicion_token = 0
                     for token in contenido:
                         # Si el token no esta en el diccionario de tokens, se añade
                         if token not in self.index[field]:
-                            self.index[field][token] = {
-                                self.new_cont: [posicion_token]}
+                            if not self.positional:
+                                self.index[field][token] = {
+                                    self.new_cont: 1}
+                            else:
+                                self.index[field][token] = {
+                                    self.new_cont: [posicion_token]}
                         # Si el token esta ya...
                         else:
                             # ...si no existe la noticia en el token, se añade
                             if self.new_cont not in self.index[field][token]:
-                                self.index[field][token][self.new_cont] = [
-                                    posicion_token]
+                                if not self.positional:
+                                    self.index[field][token][self.new_cont] = 1
+                                else:
+                                    self.index[field][token][self.new_cont] = [
+                                        posicion_token]
                             else:
                                 # Si no, se añade a la entrada del token-noticia la posición donde se ha encontrado
-                                self.index[field][token][self.new_cont] += [posicion_token]
+                                if not self.positional:
+                                    self.index[field][token][self.new_cont] += 1
+                                else:
+                                    self.index[field][token][self.new_cont] += [posicion_token]
 
                         posicion_token += 1
 
@@ -627,6 +629,7 @@ class SAR_Project:
 
         """
         res = []
+
         # NO FUNCIONA BIEN
         # Se comprueba que se ha indexado el primer termino
         if terms[0] in self.index[field]:
@@ -644,6 +647,11 @@ class SAR_Project:
                                     position += 1
                                 else:
                                     seguido = False
+                            else:
+                                seguido = False
+                        else:
+                            seguido = False
+
                 if seguido:
                     res += [new]
 
@@ -661,12 +669,14 @@ class SAR_Project:
         return: posting list
 
         """
+
         # Se obtiene el stem de un término
         stem = self.stemmer.stem(term)
         res = []
 
         # Se hace la unión de las posting list de cada termino que contenga la entrada en el indice de stems
         if stem in self.sindex[field]:
+
             for token in self.sindex[field][stem]:
                 # Se utiliza el OR propio por eficiencia
                 res = self.or_posting(
@@ -697,7 +707,7 @@ class SAR_Project:
         term = term[:-1]
 
         # Se hace la unión de las diferentes posting list de cada termino al que apunta un indice permuterm
-        # Si el comodin es '*', se busca todos los permuterms que comienzen por la wildcar query
+        # Si el comodin es '*', se busca todos los permuterms que comiencen por la wildcard query
         # Si el comidin es '?', lo mismo pero que ademas la longitud sea igual a la del término original
         for permuterm in (x for x in list(self.ptindex[field].keys()) if x.startswith(term) and (simbolo == '*' or len(x) == len(term) + 1)):
             for token in self.ptindex[field][permuterm]:
@@ -921,6 +931,9 @@ class SAR_Project:
 
         return: la métrica de un par consulta - documento
         '''
+        query = query.replace('NOT ', 'NOT')
+        query = query.replace('AND', '')
+        query = query.replace('OR', '')
         query = set(self.tokenize(query))
 
         metrica_total = 0
@@ -962,6 +975,7 @@ class SAR_Project:
         query = query.replace('(', '')
         query = query.replace(')', '')
         query = query.replace('?', '')
+        query = query.replace('NOT ', 'NOT')
         # Palabra rara para tener en cuenta campo multifield
         query = query.replace(':', 'HZMPOSICIONAL')
         query = self.tokenize(query)
@@ -974,7 +988,6 @@ class SAR_Project:
         # No siempre es posible por la naturaleza de los conectores y las ampliaciones (los permuterms es díficil que consiga algo)
         for word in query:
             local = words
-            local_sin_procesar = new['article'].split()
 
             # Si un término es consulta multifield, la generación del
             # snippet para ese término se hará en ese campo
@@ -982,12 +995,7 @@ class SAR_Project:
                 field, word = word.split('HZMPOSICIONAL')
                 # No hay que tokenizar la fecha
                 if field != 'date':
-                    if field == 'keywords':
-                        local_sin_procesar = new[field].split(',')
-                    else:
-                        local_sin_procesar = new[field].split()
                     local = self.tokenize(new[field])
-                    
 
             # Por defecto se busca en 'article' pero por si es multifield
             # se realiza la copia local
@@ -1000,15 +1008,15 @@ class SAR_Project:
                 if min_p < 0:
                     min_p = 0
                 max_p = pos + 5
-                if max_p > len(local_sin_procesar) - 1:
-                    max_p = len(local_sin_procesar) - 1
+                if max_p > len(local) - 1:
+                    max_p = len(local) - 1
 
                 # Si el fragmento no está al principio
                 snippet_aux = ''
                 if min_p > 0:
                     snippet_aux += '...'
 
-                snippet_aux += " ".join(local_sin_procesar[min_p:max_p + 1])
+                snippet_aux += " ".join(local[min_p:max_p + 1])
 
                 # Si el fragmento no está al final
                 if max_p < len(local) - 1:

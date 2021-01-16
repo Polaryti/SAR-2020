@@ -1,11 +1,5 @@
 # SAR-19/20
 
-Proyecto de prácticas de Sistemas de Almacenamiento y Recuperación de la Información (SAR), 3º de Ingeniería Informática en la ETSINF, UPV
+Proyecto de prácticas de la asignatura **Sistemas de Almacenamiento y Recuperación de la Información** (SAR).
 
-## Funcionalidades extras implementadas
-
-Stemming
-Multifield
-Ranking
-Permuterm
-Paréntesis
+Ingeniería Informática, rama de Computación, en la Escola Tècnica Superior de Enginyeria Informàtica (ETSINF) de la Universitat Politècnica de Valencia (UPV).
